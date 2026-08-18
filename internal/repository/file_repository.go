@@ -137,6 +137,7 @@ func fileExists(path string) bool {
 }
 
 type fileApplicationRepo struct {
+	mu  sync.Mutex
 	dir string
 }
 
@@ -144,6 +145,8 @@ func (r *fileApplicationRepo) Create(ctx context.Context, app *domain.Applicatio
 	if app == nil {
 		return domain.ErrInvalidArgument
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	path := filepath.Join(r.dir, app.ID+".json")
 	if fileExists(path) {
 		return domain.ErrAlreadyExists
@@ -155,11 +158,17 @@ func (r *fileApplicationRepo) Update(ctx context.Context, app *domain.Applicatio
 	if app == nil {
 		return domain.ErrInvalidArgument
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	path := filepath.Join(r.dir, app.ID+".json")
 	var existing domain.Application
 	if err := readJSON(path, &existing); err != nil {
 		return err
 	}
+	// Optimistic concurrency: the version we read must still be the one on disk.
+	// Holding the lock across the read-check-write makes the CAS atomic, so a
+	// concurrent committer cannot slip in between the version check and the write
+	// and also win. Exactly one concurrent update advances the persisted version.
 	if existing.Version > app.Version-1 {
 		return domain.ErrOptimisticConflict
 	}

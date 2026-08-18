@@ -28,7 +28,12 @@ type Application struct {
 }
 
 func (a *Application) ApplyLock(at time.Time) error {
-	if a.Status != ApplicationDraft && a.Status != ApplicationLocked {
+	// Locking is a one-shot transition out of DRAFT. An application that is
+	// already LOCKED is not re-locked, so a concurrent or repeated lock attempt
+	// never advances the version a second time or produces a duplicate audit.
+	// This matches CanTransitionTo and NextStatusForEvent("lock", ...), which
+	// only allow DRAFT -> LOCKED.
+	if a.Status != ApplicationDraft {
 		return ErrInvalidTransition
 	}
 	a.Status = ApplicationLocked

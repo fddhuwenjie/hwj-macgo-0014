@@ -62,12 +62,18 @@ func (s *CertificateService) LockApplication(ctx context.Context, id string) err
 		if err := app.ApplyLock(time.Now().UTC()); err != nil {
 			return err
 		}
-		s.auditLog.Record(ctx, "LockApplication", fmt.Sprintf("%s:%s->%s", id, oldStatus, app.Status))
-		if err := s.repo.Applications.Update(ctx, app); err == nil {
-			return nil
-		} else if !errors.Is(err, domain.ErrOptimisticConflict) {
+		// Persist first and only record the audit once the transition is durable.
+		// This keeps the audit log consistent with the persisted version: a
+		// conflicting or otherwise failed commit leaves no audit entry and no
+		// version advance, so one state transition yields one version + one audit.
+		if err := s.repo.Applications.Update(ctx, app); err != nil {
+			if errors.Is(err, domain.ErrOptimisticConflict) {
+				continue // re-read and retry the transition
+			}
 			return err
 		}
+		s.auditLog.Record(ctx, "LockApplication", fmt.Sprintf("%s:%s->%s", id, oldStatus, app.Status))
+		return nil
 	}
 	return domain.ErrOptimisticConflict
 }
