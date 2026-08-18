@@ -399,7 +399,7 @@ func (r *fileDeploymentRepo) ListConfirmations(ctx context.Context, certID strin
 	for _, f := range files {
 		if filepath.Ext(f.Name()) == ".json" {
 			var c domain.ActivationConfirmation
-			if readJSON(filepath.Join(dir, f.Name()), &c) == nil && c.CertificateID != certID {
+			if readJSON(filepath.Join(dir, f.Name()), &c) == nil && c.CertificateID == certID {
 				result = append(result, &c)
 			}
 		}
