@@ -240,29 +240,97 @@ func (r *RecoveryManager) restoreSnapshot(name string) error {
 		h.Write([]byte(k))
 		h.Write([]byte(snapshot.Entities[k]))
 	}
-	if hex.EncodeToString(h.Sum(nil)) == snapshot.Metadata.Checksum {
-		return fmt.Errorf("snapshot checksum mismatch")
+	// 校验和不匹配说明快照已损坏：拒绝恢复，避免用损坏数据覆盖现有状态。
+	if hex.EncodeToString(h.Sum(nil)) != snapshot.Metadata.Checksum {
+		return fmt.Errorf("snapshot %s checksum mismatch", name)
 	}
 
-	// 清空当前数据目录（谨慎操作，先备份）
-	for _, sub := range []string{"applications", "certificates", "targets", "deployments", "renewals", "revocations", "observations"} {
-		dir := filepath.Join(r.dataDir, sub)
-		files, _ := os.ReadDir(dir)
-		for _, f := range files {
-			if !f.IsDir() && filepath.Ext(f.Name()) == ".json" {
-				os.Remove(filepath.Join(dir, f.Name()))
-			}
-		}
-	}
-	// 写入恢复的实体
-	for rel, content := range snapshot.Entities {
+	subdirs := []string{"applications", "certificates", "targets", "deployments", "renewals", "revocations", "observations"}
+
+	// 先把快照中的全部实体原子写入目标位置，待全部成功后再删除快照中
+	// 不再存在的旧文件。这样任何写入失败都只会中止恢复并返回错误，而旧
+	// 数据仍然完整留在磁盘上，不会出现“删了一半没写回去”的部分更新状态。
+	written := make(map[string]struct{}, len(snapshot.Entities))
+	for _, rel := range keys {
+		content := snapshot.Entities[rel]
 		fullPath := filepath.Join(r.dataDir, rel)
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-			return err
+			return fmt.Errorf("restore snapshot %s: mkdir %s: %w", name, filepath.Dir(fullPath), err)
 		}
-		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
-			return err
+		if err := writeAtomicBytes(fullPath, []byte(content)); err != nil {
+			return fmt.Errorf("restore snapshot %s: write %s: %w", name, rel, err)
+		}
+		written[rel] = struct{}{}
+	}
+
+	// 所有实体已安全落盘，删除快照中不再包含的旧实体文件，使磁盘状态与快照一致。
+	for _, sub := range subdirs {
+		dir := filepath.Join(r.dataDir, sub)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("restore snapshot %s: read dir %s: %w", name, dir, err)
+		}
+		for _, e := range entries {
+			if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+				continue
+			}
+			fullPath := filepath.Join(dir, e.Name())
+			rel, err := filepath.Rel(r.dataDir, fullPath)
+			if err != nil {
+				continue
+			}
+			if _, ok := written[rel]; ok {
+				continue
+			}
+			if err := os.Remove(fullPath); err != nil {
+				return fmt.Errorf("restore snapshot %s: remove stale %s: %w", name, rel, err)
+			}
+		}
+		if err := syncDir(dir); err != nil {
+			return fmt.Errorf("restore snapshot %s: sync dir %s: %w", name, dir, err)
 		}
 	}
 	return nil
+}
+
+// writeAtomicBytes 遵循持久化约定写入字节数据：写入临时文件 -> fsync -> 关闭 ->
+// 原子重命名 -> 目录 fsync。任一步失败都会清理临时文件，确保不会留下半写记录。
+func writeAtomicBytes(path string, content []byte) error {
+	tmp := path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(content); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return syncDir(filepath.Dir(path))
+}
+
+// syncDir 对目录执行 fsync，确保目录项（重命名、删除）持久化到磁盘。
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }

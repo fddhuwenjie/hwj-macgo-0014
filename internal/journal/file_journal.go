@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,9 +97,11 @@ func (j *FileJournal) Recover() ([]domain.Event, error) {
 		}
 		parts := splitRecord(string(data))
 		if len(parts) != 3 {
+			// 格式不正确（可能是写了一半就崩溃的残留记录）：拒绝该记录。
 			continue
 		}
-		if verifyChecksum([]byte(parts[1]), parts[2]) {
+		// 校验和不匹配说明记录已损坏：拒绝恢复，跳过该记录。
+		if !verifyChecksum([]byte(parts[1]), parts[2]) {
 			continue
 		}
 		var ev domain.Event
@@ -130,8 +134,12 @@ func splitRecord(s string) []string {
 	return []string{fmt.Sprintf("%d", length), data, checksumStr}
 }
 
+// verifyChecksum 校验记录内容是否与记录中保存的校验和一致。
+// 校验和以十六进制存储，且可能带有尾随换行，故用 ParseUint 解析并去除空白。
 func verifyChecksum(data []byte, checksumStr string) bool {
-	var expected byte
-	fmt.Sscanf(checksumStr, "%x", &expected)
-	return checksum(data) == expected
+	expected, err := strconv.ParseUint(strings.TrimSpace(checksumStr), 16, 8)
+	if err != nil {
+		return false
+	}
+	return checksum(data) == byte(expected)
 }
