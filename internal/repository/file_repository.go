@@ -225,6 +225,27 @@ func (r *fileCertificateRepo) Update(ctx context.Context, cert *domain.Certifica
 	return writeJSON(path, cert)
 }
 
+// Delete 移除一个证书文件。若文件不存在则返回 nil（幂等），
+// 主要用于登记签发失败时回滚刚创建的证书，避免留下部分更新。
+func (r *fileCertificateRepo) Delete(ctx context.Context, id string) error {
+	if id == "" {
+		return domain.ErrInvalidArgument
+	}
+	path := filepath.Join(r.dir, id+".json")
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	dir, err := os.Open(r.dir)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
+}
+
 func (r *fileCertificateRepo) Get(ctx context.Context, id string) (*domain.CertificateVersion, error) {
 	path := filepath.Join(r.dir, id+".json")
 	var cert domain.CertificateVersion

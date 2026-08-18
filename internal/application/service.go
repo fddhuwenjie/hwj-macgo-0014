@@ -75,7 +75,9 @@ func (s *CertificateService) RegisterIssuance(ctx context.Context, appID string)
 	if err != nil {
 		return err
 	}
-	if err := domain.ValidateTransition(app.Status, domain.ApplicationActive); err != nil {
+	// 登记签发的目标状态是 ISSUED。LOCKED -> ISSUED 合法；
+	// DRAFT -> ISSUED 与 REVOKED -> ISSUED 均非法，继续被拒绝。
+	if err := domain.ValidateTransition(app.Status, domain.ApplicationIssued); err != nil {
 		return err
 	}
 	notBefore := time.Now().UTC()
@@ -102,6 +104,10 @@ func (s *CertificateService) RegisterIssuance(ctx context.Context, appID string)
 	app.UpdatedAt = time.Now().UTC()
 	app.Version++
 	if err := s.repo.Applications.Update(ctx, app); err != nil {
+		// 申请状态未能持久化为 ISSUED，回滚刚创建的证书，
+		// 避免留下“证书已存在但申请仍为 LOCKED”的部分更新：
+		// 这样状态、查询结果与持久化数据保持一致，且重试不会产生重复证书。
+		_ = s.repo.Certificates.Delete(ctx, cert.ID)
 		return err
 	}
 	s.auditLog.Record(ctx, "RegisterIssuance", appID+"/"+cert.ID)

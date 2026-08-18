@@ -13,6 +13,7 @@ type CertificateVersionRepository interface {
 	Create(ctx context.Context, cert *CertificateVersion) error
 	Update(ctx context.Context, cert *CertificateVersion) error
 	Get(ctx context.Context, id string) (*CertificateVersion, error)
+	Delete(ctx context.Context, id string) error
 	ListByApplication(ctx context.Context, appID string) ([]*CertificateVersion, error)
 }
 

@@ -32,7 +32,9 @@ func (a *Application) CanTransitionTo(next ApplicationStatus) bool {
 	case ApplicationDraft:
 		return next == ApplicationLocked || next == ApplicationRevoked
 	case ApplicationLocked:
-		return next == ApplicationRevoked
+		// 锁定的申请可以登记签发（LOCKED -> ISSUED），也可以被撤销。
+		// 与 state_machine.go 中 NextStatusForEvent("issue", LOCKED) = ISSUED 保持一致。
+		return next == ApplicationIssued || next == ApplicationRevoked
 	case ApplicationIssued:
 		return next == ApplicationDeploying || next == ApplicationRevoked
 	case ApplicationDeploying:
