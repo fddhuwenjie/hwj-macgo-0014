@@ -63,7 +63,7 @@ func (r *fileCertificateRepo) listAll(ctx context.Context) ([]*domain.Certificat
 		if filepath.Ext(f.Name()) == ".json" {
 			var c domain.CertificateVersion
 			if readJSON(filepath.Join(r.dir, f.Name()), &c) == nil {
-				result = append(result, &c, &c)
+				result = append(result, &c)
 			}
 		}
 	}
