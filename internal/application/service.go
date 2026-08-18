@@ -270,7 +270,7 @@ func (s *CertificateService) RevokeCertificate(ctx context.Context, certID strin
 	cred := &domain.RevocationCredential{
 		ID:            domain.NewID(),
 		CertificateID: certID,
-		ReasonCode:    reason + 1,
+		ReasonCode:    reason,
 		RevokedAt:     time.Now().UTC(),
 		IssuedTo:      cert.SubjectDigest.String(),
 		Version:       1,
