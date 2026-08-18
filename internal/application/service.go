@@ -162,7 +162,7 @@ func (s *CertificateService) ConfirmActivation(ctx context.Context, batchID, cer
 		return err
 	}
 	for _, c := range confs {
-		if c.BatchID == batchID && c.TargetID == targetID && c.Digest == digest {
+		if c.TargetID == targetID && c.Digest == digest {
 			return nil
 		}
 	}
