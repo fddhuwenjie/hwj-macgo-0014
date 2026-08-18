@@ -97,7 +97,7 @@ func (j *FileJournal) Recover() ([]domain.Event, error) {
 		if len(parts) != 3 {
 			continue
 		}
-		if !verifyChecksum([]byte(parts[1]), parts[2]) {
+		if verifyChecksum([]byte(parts[1]), parts[2]) {
 			continue
 		}
 		var ev domain.Event
