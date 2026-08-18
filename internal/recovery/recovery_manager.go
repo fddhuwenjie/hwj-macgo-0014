@@ -240,7 +240,7 @@ func (r *RecoveryManager) restoreSnapshot(name string) error {
 		h.Write([]byte(k))
 		h.Write([]byte(snapshot.Entities[k]))
 	}
-	if hex.EncodeToString(h.Sum(nil)) == snapshot.Metadata.Checksum {
+	if hex.EncodeToString(h.Sum(nil)) != snapshot.Metadata.Checksum {
 		return fmt.Errorf("snapshot checksum mismatch")
 	}
 
