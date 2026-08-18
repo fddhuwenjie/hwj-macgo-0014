@@ -75,7 +75,7 @@ func (s *CertificateService) RegisterIssuance(ctx context.Context, appID string)
 	if err != nil {
 		return err
 	}
-	if err := domain.ValidateTransition(app.Status, domain.ApplicationActive); err != nil {
+	if err := domain.ValidateTransition(app.Status, domain.ApplicationIssued); err != nil {
 		return err
 	}
 	notBefore := time.Now().UTC()

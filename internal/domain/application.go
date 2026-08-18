@@ -32,7 +32,7 @@ func (a *Application) CanTransitionTo(next ApplicationStatus) bool {
 	case ApplicationDraft:
 		return next == ApplicationLocked || next == ApplicationRevoked
 	case ApplicationLocked:
-		return next == ApplicationRevoked
+		return next == ApplicationIssued || next == ApplicationRevoked
 	case ApplicationIssued:
 		return next == ApplicationDeploying || next == ApplicationRevoked
 	case ApplicationDeploying:
