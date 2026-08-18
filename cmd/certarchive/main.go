@@ -59,7 +59,13 @@ func runSelfCheck() error {
 	sched := scheduler.NewScheduler(app, qry, rec)
 
 	ctx := context.Background()
-	_, _ = repo.CheckStorageHealth(ctx)
+	// The storage health check is the audit gate for on-disk integrity: a
+	// lingering ".tmp" is evidence of an interrupted atomic write. Discarding
+	// its verdict here would let a broken link pass as success, so the error
+	// must propagate up to the self-check exit code.
+	if _, err := repo.CheckStorageHealth(ctx); err != nil {
+		return err
+	}
 	// 创建一个申请并走几步流程
 	appID, err := app.SubmitApplication(ctx, "example.com", "RSA-2048", "Org1")
 	if err != nil {

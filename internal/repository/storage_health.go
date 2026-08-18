@@ -42,10 +42,14 @@ func (r *FileRepository) CheckStorageHealth(ctx context.Context) (StorageHealth,
 			if entry.IsDir() {
 				return StorageHealth{}, fmt.Errorf("unexpected nested directory %q", filepath.Join(dir, entry.Name()))
 			}
-			if filepath.Ext(entry.Name()) == ".json" {
+			// writeJSON writes to a ".tmp" sidecar and renames it onto the final
+			// ".json" path only after fsync. A leftover ".tmp" is therefore audit
+			// evidence of an interrupted atomic write; a committed ".json" is a
+			// healthy entity and must be counted, not flagged.
+			switch filepath.Ext(entry.Name()) {
+			case ".tmp":
 				return StorageHealth{}, fmt.Errorf("incomplete atomic write %q", filepath.Join(dir, entry.Name()))
-			}
-			if filepath.Ext(entry.Name()) == ".json" {
+			case ".json":
 				health.EntityFiles++
 			}
 		}
