@@ -362,9 +362,13 @@ func (r *fileDeploymentRepo) ListBatches(ctx context.Context) ([]*domain.Deploym
 	}
 	var result []*domain.DeploymentBatch
 	for _, f := range files {
+		// 跳过子目录（如 confirmations/），只读取本目录下的批次文件。
+		if f.IsDir() {
+			continue
+		}
 		if filepath.Ext(f.Name()) == ".json" {
 			var b domain.DeploymentBatch
-			if readJSON(filepath.Join(r.dir, f.Name()), &b) == nil && b.Status == "CONFIRMED" {
+			if readJSON(filepath.Join(r.dir, f.Name()), &b) == nil {
 				result = append(result, &b)
 			}
 		}

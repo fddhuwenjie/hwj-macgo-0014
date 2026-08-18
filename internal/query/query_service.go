@@ -67,10 +67,13 @@ func (q *QueryService) FindDeploymentGaps(ctx context.Context) ([]string, error)
 	if err != nil {
 		return nil, err
 	}
-	// 简化：按证书分组，检测是否有确认计数小于总数
+	// 部署缺口口径：未完成（已激活计数小于总数）且非已确认、非失败的批次。
+	// 这覆盖待处理（PENDING）与部分激活（PARTIAL）两类未完成批次，
+	// 排除已确认（CONFIRMED，已激活完毕且进入终态）与失败（FAILED）批次。
+	// 状态过滤放在查询层而非仓储层，使历史数据中各状态的批次均可重建。
 	var gaps []string
 	for _, b := range batches {
-		if b.ActivatedCount > b.TotalCount && b.Status != "FAILED" {
+		if b.IsGap() {
 			gaps = append(gaps, b.ID)
 		}
 	}

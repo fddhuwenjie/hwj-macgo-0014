@@ -131,7 +131,7 @@ func (s *CertificateService) DeployBatch(ctx context.Context, certID, targetID s
 		CertificateID: certID,
 		TargetID:      targetID,
 		Generation:    cert.Version,
-		Status:        "PENDING",
+		Status:        domain.BatchPending,
 		TotalCount:    count,
 		CreatedAt:     time.Now().UTC(),
 		UpdatedAt:     time.Now().UTC(),
@@ -202,7 +202,7 @@ func (s *CertificateService) ConfirmActivation(ctx context.Context, batchID, cer
 	batch.UpdatedAt = time.Now().UTC()
 	batch.Version++
 	if batch.ActivatedCount >= batch.TotalCount {
-		batch.Status = "CONFIRMED"
+		batch.Status = domain.BatchConfirmed
 		app, err := s.repo.Applications.Get(ctx, cert.ApplicationID)
 		if err == nil && app.Status == domain.ApplicationDeploying {
 			app.Status = domain.ApplicationActive
@@ -213,7 +213,7 @@ func (s *CertificateService) ConfirmActivation(ctx context.Context, batchID, cer
 			}
 		}
 	} else {
-		batch.Status = "PARTIAL"
+		batch.Status = domain.BatchPartial
 	}
 	if err := s.repo.Deployments.UpdateBatch(ctx, batch); err != nil {
 		return err
