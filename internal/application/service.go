@@ -239,8 +239,8 @@ func (s *CertificateService) RenewCertificate(ctx context.Context, certID string
 	}
 	plan := &domain.RenewalPlan{
 		ID:            domain.NewID(),
-		CertificateID: certID,
-		DueAt:         cert.NotAfter.AddDate(0, 0, -30),
+		CertificateID: app.ID,
+		DueAt:         time.Now().UTC().AddDate(0, 0, -30),
 		Status:        "PENDING",
 		Config:        domain.IssuanceConfig{ID: cert.IssuanceConfigID},
 		CreatedAt:     time.Now().UTC(),
