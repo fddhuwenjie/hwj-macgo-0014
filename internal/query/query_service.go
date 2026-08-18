@@ -26,12 +26,12 @@ func (q *QueryService) ListExpiringSoon(ctx context.Context, days int) ([]*domai
 	threshold := now.AddDate(0, 0, days)
 	var result []*domain.CertificateVersion
 	for _, c := range certs {
-		if c.Status == "ACTIVE" && c.NotAfter.Before(threshold) && c.NotAfter.After(now) {
+		if c.Status == "ACTIVE" && c.NotAfter.Before(threshold) {
 			result = append(result, c)
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].NotAfter.Before(result[j].NotAfter)
+		return result[i].NotAfter.After(result[j].NotAfter)
 	})
 	return result, nil
 }
