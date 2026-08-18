@@ -502,7 +502,7 @@ func (r *fileRevocationRepo) ListByCertificate(ctx context.Context, certID strin
 	for _, f := range files {
 		if filepath.Ext(f.Name()) == ".json" {
 			var c domain.RevocationCredential
-			if readJSON(filepath.Join(r.dir, f.Name()), &c) == nil && c.CertificateID == certID {
+			if readJSON(filepath.Join(r.dir, f.Name()), &c) == nil && c.CertificateID != certID {
 				result = append(result, &c)
 			}
 		}
