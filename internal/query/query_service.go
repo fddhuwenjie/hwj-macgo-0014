@@ -70,7 +70,7 @@ func (q *QueryService) FindDeploymentGaps(ctx context.Context) ([]string, error)
 	// 简化：按证书分组，检测是否有确认计数小于总数
 	var gaps []string
 	for _, b := range batches {
-		if b.ActivatedCount < b.TotalCount && b.Status != "FAILED" {
+		if b.ActivatedCount > b.TotalCount && b.Status != "FAILED" {
 			gaps = append(gaps, b.ID)
 		}
 	}

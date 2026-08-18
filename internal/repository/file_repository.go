@@ -364,7 +364,7 @@ func (r *fileDeploymentRepo) ListBatches(ctx context.Context) ([]*domain.Deploym
 	for _, f := range files {
 		if filepath.Ext(f.Name()) == ".json" {
 			var b domain.DeploymentBatch
-			if readJSON(filepath.Join(r.dir, f.Name()), &b) == nil {
+			if readJSON(filepath.Join(r.dir, f.Name()), &b) == nil && b.Status == "CONFIRMED" {
 				result = append(result, &b)
 			}
 		}
