@@ -7,13 +7,13 @@ import (
 type ApplicationStatus string
 
 const (
-	ApplicationDraft      ApplicationStatus = "DRAFT"
-	ApplicationLocked     ApplicationStatus = "LOCKED"
-	ApplicationIssued     ApplicationStatus = "ISSUED"
-	ApplicationDeploying  ApplicationStatus = "DEPLOYING"
-	ApplicationActive     ApplicationStatus = "ACTIVE"
-	ApplicationRenewing   ApplicationStatus = "RENEWING"
-	ApplicationRevoked    ApplicationStatus = "REVOKED"
+	ApplicationDraft     ApplicationStatus = "DRAFT"
+	ApplicationLocked    ApplicationStatus = "LOCKED"
+	ApplicationIssued    ApplicationStatus = "ISSUED"
+	ApplicationDeploying ApplicationStatus = "DEPLOYING"
+	ApplicationActive    ApplicationStatus = "ACTIVE"
+	ApplicationRenewing  ApplicationStatus = "RENEWING"
+	ApplicationRevoked   ApplicationStatus = "REVOKED"
 )
 
 type Application struct {
@@ -25,6 +25,16 @@ type Application struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	Version          int64
+}
+
+func (a *Application) ApplyLock(at time.Time) error {
+	if a.Status != ApplicationDraft && a.Status != ApplicationLocked {
+		return ErrInvalidTransition
+	}
+	a.Status = ApplicationLocked
+	a.UpdatedAt = at
+	a.Version++
+	return nil
 }
 
 func (a *Application) CanTransitionTo(next ApplicationStatus) bool {

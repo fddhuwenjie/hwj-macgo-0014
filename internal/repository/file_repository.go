@@ -160,7 +160,7 @@ func (r *fileApplicationRepo) Update(ctx context.Context, app *domain.Applicatio
 	if err := readJSON(path, &existing); err != nil {
 		return err
 	}
-	if existing.Version != app.Version-1 {
+	if existing.Version > app.Version-1 {
 		return domain.ErrOptimisticConflict
 	}
 	return writeJSON(path, app)

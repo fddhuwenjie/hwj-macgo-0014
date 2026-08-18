@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -52,22 +53,23 @@ func (s *CertificateService) SubmitApplication(ctx context.Context, subject, key
 }
 
 func (s *CertificateService) LockApplication(ctx context.Context, id string) error {
-	app, err := s.repo.Applications.Get(ctx, id)
-	if err != nil {
-		return err
+	for attempt := 0; attempt < 2; attempt++ {
+		app, err := s.repo.Applications.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		oldStatus := app.Status
+		if err := app.ApplyLock(time.Now().UTC()); err != nil {
+			return err
+		}
+		s.auditLog.Record(ctx, "LockApplication", fmt.Sprintf("%s:%s->%s", id, oldStatus, app.Status))
+		if err := s.repo.Applications.Update(ctx, app); err == nil {
+			return nil
+		} else if !errors.Is(err, domain.ErrOptimisticConflict) {
+			return err
+		}
 	}
-	if err := domain.ValidateTransition(app.Status, domain.ApplicationLocked); err != nil {
-		return err
-	}
-	oldStatus := app.Status
-	app.Status = domain.ApplicationLocked
-	app.UpdatedAt = time.Now().UTC()
-	app.Version++
-	if err := s.repo.Applications.Update(ctx, app); err != nil {
-		return err
-	}
-	s.auditLog.Record(ctx, "LockApplication", fmt.Sprintf("%s:%s->%s", id, oldStatus, app.Status))
-	return nil
+	return domain.ErrOptimisticConflict
 }
 
 func (s *CertificateService) RegisterIssuance(ctx context.Context, appID string) error {
