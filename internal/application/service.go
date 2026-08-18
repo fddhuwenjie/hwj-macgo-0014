@@ -157,12 +157,17 @@ func (s *CertificateService) DeployBatch(ctx context.Context, certID, targetID s
 }
 
 func (s *CertificateService) ConfirmActivation(ctx context.Context, batchID, certID, targetID string, digest domain.SubjectDigest) error {
+	// 幂等键作用域为（证书、批次、目标、摘要）：只有同一证书在同一批次、
+	// 同一目标上以同一摘要确认过，才视为重复确认并直接返回成功。若仅按
+	// 目标+摘要去重，会把另一证书（或同一证书的另一批次）的确认记录误判
+	// 为本次确认，导致批次计数不增加却谎报幂等成功。
 	confs, err := s.repo.Deployments.ListConfirmations(ctx, certID)
 	if err != nil {
 		return err
 	}
 	for _, c := range confs {
-		if c.TargetID == targetID && c.Digest == digest {
+		if c.CertificateID == certID && c.BatchID == batchID &&
+			c.TargetID == targetID && c.Digest == digest {
 			return nil
 		}
 	}
@@ -198,28 +203,67 @@ func (s *CertificateService) ConfirmActivation(ctx context.Context, batchID, cer
 	if err := s.repo.Deployments.CreateConfirmation(ctx, conf); err != nil {
 		return err
 	}
+	// 推进批次计数。若失败，回滚刚写入的确认记录，避免留下"有确认记录但
+	// 计数未增加"的部分更新——否则重试时会因幂等命中而静默返回，批次被卡住。
+	prevStatus := batch.Status
 	batch.ActivatedCount++
 	batch.UpdatedAt = time.Now().UTC()
 	batch.Version++
 	if batch.ActivatedCount >= batch.TotalCount {
 		batch.Status = "CONFIRMED"
-		app, err := s.repo.Applications.Get(ctx, cert.ApplicationID)
-		if err == nil && app.Status == domain.ApplicationDeploying {
-			app.Status = domain.ApplicationActive
-			app.UpdatedAt = time.Now().UTC()
-			app.Version++
-			if err := s.repo.Applications.Update(ctx, app); err != nil {
-				return err
-			}
-		}
 	} else {
 		batch.Status = "PARTIAL"
 	}
 	if err := s.repo.Deployments.UpdateBatch(ctx, batch); err != nil {
+		if rbErr := s.repo.Deployments.DeleteConfirmation(ctx, conf.ID); rbErr != nil {
+			return fmt.Errorf("update batch failed: %w; rollback confirmation failed: %v", err, rbErr)
+		}
 		return err
+	}
+	// 批次确认完成后级联推进应用状态。若失败，回滚批次计数与确认记录，使
+	// 相关状态、查询结果与持久化数据保持一致，调用方可整体重试。
+	if batch.Status == "CONFIRMED" {
+		if err := s.activateApplication(ctx, cert.ApplicationID); err != nil {
+			if rbErr := s.rollbackBatchAndConfirmation(ctx, batch, prevStatus, conf.ID); rbErr != nil {
+				return fmt.Errorf("activate application failed: %w; rollback failed: %v", err, rbErr)
+			}
+			return err
+		}
 	}
 	s.auditLog.Record(ctx, "ConfirmActivation", conf.ID)
 	return nil
+}
+
+// activateApplication 把处于 DEPLOYING 状态的应用推进为 ACTIVE。应用缺失或
+// 不在 DEPLOYING 状态时不视为错误（与历史行为一致）；仅在成功读取到
+// DEPLOYING 应用时才尝试更新，并返回更新结果。
+func (s *CertificateService) activateApplication(ctx context.Context, appID string) error {
+	app, err := s.repo.Applications.Get(ctx, appID)
+	if err != nil {
+		return nil
+	}
+	if app.Status != domain.ApplicationDeploying {
+		return nil
+	}
+	app.Status = domain.ApplicationActive
+	app.UpdatedAt = time.Now().UTC()
+	app.Version++
+	return s.repo.Applications.Update(ctx, app)
+}
+
+// rollbackBatchAndConfirmation 在级联推进应用状态失败时，将批次计数与状态恢复
+// 到推进前的取值，并删除刚写入的确认记录，保证持久化状态不留部分更新。先恢复
+// 批次再删除确认：即使回滚中途失败，残留的也是"确认存在但计数偏低"的可检测
+// 状态，而非会引发重复计数的"计数偏高"状态。
+func (s *CertificateService) rollbackBatchAndConfirmation(ctx context.Context, batch *domain.DeploymentBatch, prevStatus string, confID string) error {
+	batch.ActivatedCount--
+	batch.Status = prevStatus
+	batch.Version++ // 磁盘上已是推进后的版本，再递增以通过乐观锁校验
+	batch.UpdatedAt = time.Now().UTC()
+	if err := s.repo.Deployments.UpdateBatch(ctx, batch); err != nil {
+		return err
+	}
+	return s.repo.Deployments.DeleteConfirmation(ctx, confID)
 }
 
 func (s *CertificateService) RenewCertificate(ctx context.Context, certID string) (string, error) {

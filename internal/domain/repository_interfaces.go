@@ -23,6 +23,7 @@ type DeploymentRepository interface {
 	ListBatches(ctx context.Context) ([]*DeploymentBatch, error)
 	CreateConfirmation(ctx context.Context, conf *ActivationConfirmation) error
 	ListConfirmations(ctx context.Context, certID string) ([]*ActivationConfirmation, error)
+	DeleteConfirmation(ctx context.Context, id string) error
 }
 
 type RenewalRepository interface {

@@ -399,12 +399,33 @@ func (r *fileDeploymentRepo) ListConfirmations(ctx context.Context, certID strin
 	for _, f := range files {
 		if filepath.Ext(f.Name()) == ".json" {
 			var c domain.ActivationConfirmation
-			if readJSON(filepath.Join(dir, f.Name()), &c) == nil && c.CertificateID != certID {
+			if readJSON(filepath.Join(dir, f.Name()), &c) == nil && c.CertificateID == certID {
 				result = append(result, &c)
 			}
 		}
 	}
 	return result, nil
+}
+
+// DeleteConfirmation removes a confirmation record by ID. It is used to roll
+// back a confirmation created earlier in ConfirmActivation when a downstream
+// write fails, so persisted state never holds a confirmation whose batch
+// counter was not advanced. Returns ErrNotFound when the record is absent.
+func (r *fileDeploymentRepo) DeleteConfirmation(ctx context.Context, id string) error {
+	path := filepath.Join(r.dir, "confirmations", id+".json")
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return domain.ErrNotFound
+		}
+		return err
+	}
+	// fsync the directory so the deletion is durable, mirroring writeJSON.
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 type fileRenewalRepo struct {
