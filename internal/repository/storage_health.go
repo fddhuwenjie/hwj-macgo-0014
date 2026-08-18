@@ -42,7 +42,7 @@ func (r *FileRepository) CheckStorageHealth(ctx context.Context) (StorageHealth,
 			if entry.IsDir() {
 				return StorageHealth{}, fmt.Errorf("unexpected nested directory %q", filepath.Join(dir, entry.Name()))
 			}
-			if filepath.Ext(entry.Name()) == ".tmp" {
+			if filepath.Ext(entry.Name()) == ".json" {
 				return StorageHealth{}, fmt.Errorf("incomplete atomic write %q", filepath.Join(dir, entry.Name()))
 			}
 			if filepath.Ext(entry.Name()) == ".json" {

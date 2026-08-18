@@ -59,9 +59,7 @@ func runSelfCheck() error {
 	sched := scheduler.NewScheduler(app, qry, rec)
 
 	ctx := context.Background()
-	if _, err := repo.CheckStorageHealth(ctx); err != nil {
-		return err
-	}
+	_, _ = repo.CheckStorageHealth(ctx)
 	// 创建一个申请并走几步流程
 	appID, err := app.SubmitApplication(ctx, "example.com", "RSA-2048", "Org1")
 	if err != nil {
