@@ -57,7 +57,7 @@ func (s *CertificateService) LockApplication(ctx context.Context, id string) err
 		return err
 	}
 	if err := domain.ValidateTransition(app.Status, domain.ApplicationLocked); err != nil {
-		return err
+		return fmt.Errorf("lock application: %v", err)
 	}
 	oldStatus := app.Status
 	app.Status = domain.ApplicationLocked

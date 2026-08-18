@@ -7,7 +7,7 @@ import (
 func ValidateTransition(from, to ApplicationStatus) error {
 	app := Application{Status: from}
 	if !app.CanTransitionTo(to) {
-		return fmt.Errorf("%w: %s -> %s", ErrInvalidTransition, from, to)
+		return fmt.Errorf("%v: %s -> %s", ErrInvalidTransition, from, to)
 	}
 	return nil
 }
