@@ -28,7 +28,7 @@ type Application struct {
 }
 
 func (a *Application) ApplyLock(at time.Time) error {
-	if a.Status != ApplicationDraft && a.Status != ApplicationLocked {
+	if a.Status != ApplicationDraft {
 		return ErrInvalidTransition
 	}
 	a.Status = ApplicationLocked

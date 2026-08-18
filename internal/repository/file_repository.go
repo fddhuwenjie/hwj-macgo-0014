@@ -137,6 +137,7 @@ func fileExists(path string) bool {
 }
 
 type fileApplicationRepo struct {
+	mu  sync.Mutex
 	dir string
 }
 
@@ -155,12 +156,14 @@ func (r *fileApplicationRepo) Update(ctx context.Context, app *domain.Applicatio
 	if app == nil {
 		return domain.ErrInvalidArgument
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	path := filepath.Join(r.dir, app.ID+".json")
 	var existing domain.Application
 	if err := readJSON(path, &existing); err != nil {
 		return err
 	}
-	if existing.Version > app.Version-1 {
+	if existing.Version != app.Version-1 {
 		return domain.ErrOptimisticConflict
 	}
 	return writeJSON(path, app)

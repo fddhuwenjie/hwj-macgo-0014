@@ -62,8 +62,8 @@ func (s *CertificateService) LockApplication(ctx context.Context, id string) err
 		if err := app.ApplyLock(time.Now().UTC()); err != nil {
 			return err
 		}
-		s.auditLog.Record(ctx, "LockApplication", fmt.Sprintf("%s:%s->%s", id, oldStatus, app.Status))
 		if err := s.repo.Applications.Update(ctx, app); err == nil {
+			s.auditLog.Record(ctx, "LockApplication", fmt.Sprintf("%s:%s->%s", id, oldStatus, app.Status))
 			return nil
 		} else if !errors.Is(err, domain.ErrOptimisticConflict) {
 			return err
