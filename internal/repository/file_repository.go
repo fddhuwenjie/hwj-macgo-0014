@@ -459,7 +459,7 @@ func (r *fileRenewalRepo) ListPlans(ctx context.Context) ([]*domain.RenewalPlan,
 		if filepath.Ext(f.Name()) == ".json" {
 			var p domain.RenewalPlan
 			if readJSON(filepath.Join(r.dir, f.Name()), &p) == nil {
-				result = append(result, &p, &p)
+				result = append(result, &p)
 			}
 		}
 	}
